@@ -2,8 +2,10 @@ package com.zhou.chapter1;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.sun.corba.se.impl.resolver.SplitLocalResolverImpl;
 import com.zhou.chapter1.exception.InvoiceException;
 import com.zhou.chapter1.model.Invoice;
+import com.zhou.chapter1.model.InvoiceResult;
 import com.zhou.chapter1.model.Performance;
 import com.zhou.chapter1.model.Player;
 import com.zhou.chapter1.util.FileUtil;
@@ -11,6 +13,7 @@ import com.zhou.chapter1.util.FileUtil;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -38,8 +41,11 @@ public class Practice1 {
     Map<String, Player> playerMap = (Map<String, Player>) getInputData("players.json", playerType);
 
     for (Invoice invoice : invoices) {
-      String statement = statement(invoice, playerMap);
-      System.out.println(statement);
+      InvoiceResult statement = statement(invoice, playerMap);
+
+      String plainText = InvoiceResultRenderPlainText.renderPlainText(statement);
+
+      System.out.println(plainText);
     }
 
   }
@@ -54,33 +60,41 @@ public class Practice1 {
 
   }
 
-  public static String statement(Invoice invoice, Map<String, Player> playerMap) {
+  public static InvoiceResult statement(Invoice invoice, Map<String, Player> playerMap) {
 
-    int totalAmount = 0;
-    int volumeCredits = 0;
-
-    String result = String.format("Statement for %s %n", invoice.getCustomer());
+    InvoiceResult result = new InvoiceResult();
+    result.setCustomer(invoice.getCustomer());
 
     List<Performance> performances = invoice.getPerformances();
+
+    result.setTotalVolumeCredits(getTotalVolumeCredits(performances, playerMap));
+
+    List<InvoiceResult.InvoicePlayerDetail> playerDetail = new ArrayList<>();
+    result.setPlayerDetail(playerDetail);
+
+
     for (Performance performance : performances) {
-      Player play = playerMap.get(performance.getPlayID());
+      Player player = playerMap.get(performance.getPlayID());
 
-      int thisAmount = 0;
+      int thisAmount = amountForPerformance(performance, player);
 
-      thisAmount = amountForPerformance(performance, play);
-
-      volumeCredits += volumeCreditsFor(performance, play);
-
-      result += String.format("%s : %s  (%s seats) %n", play.getName(),
-          formatNumber(thisAmount / 100), performance.getAudience());
-      totalAmount += thisAmount;
-
+      playerDetail.add(InvoiceResult.InvoicePlayerDetail.builder()
+          .playName(player.getName()).amount(thisAmount).audience(performance.getAudience())
+          .build());
     }
 
-    result += String.format("Amount owed is $%s %n", formatNumber(totalAmount / 100));
-
-    result += String.format("You earned %s credits %n", volumeCredits);
     return result;
+  }
+
+  private static int getTotalVolumeCredits(List<Performance> performances, Map<String, Player> playerMap) {
+    int volumeCredits = 0;
+
+    for (Performance performance : performances) {
+      Player player = playerMap.get(performance.getPlayID());
+
+      volumeCredits += volumeCreditsFor(performance, player);
+    }
+    return volumeCredits;
   }
 
   private static int volumeCreditsFor(Performance performance, Player play) {
@@ -120,9 +134,5 @@ public class Practice1 {
         throw new InvoiceException("not allowed type");
     }
     return result;
-  }
-
-  private static String formatNumber(Number number) {
-    return "$" + number.toString();
   }
 }
